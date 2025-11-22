@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>紫微斗數 - 大師精修版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-body: #f5f5f4;
+            --text-main: #1c1917;
+            --border-frame: #57534e;
+            --bg-cell: #ffffff;
+            --bg-cell-gradient: linear-gradient(to bottom right, #ffffff, #fafaf9);
+            
+            /* 星曜顏色 */
+            --color-major: #b91c1c; /* 硃砂紅 */
+            --color-lucky: #b45309; /* 琥珀金 */
+            --color-bad: #4b5563;   /* 水墨灰 */
+            --color-aux: #78716c;   /* 淺灰 */
+        }
+
+        body {
+            font-family: "Noto Serif TC", serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            font-size: 12px; /* 縮小基礎字體 */
+            height: 100vh; /* 鎖定全螢幕高度 */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* 禁止捲動 */
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            background-color: #e7e5e4;
+            border-bottom: 1px solid #d6d3d1;
+            padding: 4px 8px;
+            z-index: 50;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            flex-shrink: 0; /* 防止被壓縮 */
+        }
+
+        /* 主畫面容器 */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 4px;
+            overflow: hidden;
+            background-color: #d6d3d1; /* 背景色補滿 */
+        }
+
+        /* 盤面外框 */
+        .chart-container {
+            background-color: #e7e5e4;
+            /* 使用 vmin 確保在直式/橫式手機都能盡量大且完整顯示 */
+            width: 98vmin; 
+            height: 98vmin;
+            /* 最大不超過寬度 */
+            max-width: 100%; 
+            max-height: 100%;
+            /* 保持正方形 */
+            aspect-ratio: 1 / 1;
+            
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            border: 2px double var(--border-frame);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr); /* 平均分配高度 */
+            gap: 1px;
+            background-color: #d6d3d1;
+            border: 1px solid #d6d3d1;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 宮位單元 */
+        .palace-cell {
+            background-color: var(--bg-cell);
+            background-image: var(--bg-cell-gradient);
+            padding: 2px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            overflow: hidden;
+        }
+        
+        .palace-cell.selected {
+            background-color: #fffbeb !important;
+            box-shadow: inset 0 0 0 2px #b45309;
+        }
+
+        .palace-header {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0px;
+            line-height: 1;
+        }
+
+        .palace-label {
+            font-size: 0.65rem; /* 更小的字體 */
+            font-weight: 900;
+            padding: 0px 2px;
+            border-radius: 2px;
+            line-height: 1.1;
+            display: inline-block;
+            width: 100%;
+            background-color: rgba(255,255,255,0.8);
+            white-space: nowrap;
+        }
+        
+        .label-ben { color: #1c1917; border-left: 2px solid #1c1917; }
+        .label-da { color: #0891b2; border-left: 2px solid #0891b2; display: none; }
+        .label-liu { color: #c2410c; border-left: 2px solid #c2410c; display: none; }
+
+        .mode-show-daxian .label-da { display: block; }
+        .mode-show-liunian .label-liu { display: block; }
+
+        .star-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0px;
+            padding-top: 2px;
+            justify-content: flex-start; /* 靠上對齊 */
+        }
+        
+        .star-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            align-items: baseline;
+            line-height: 1.1;
+        }
+
+        /* 縮小星曜字體 */
+        .star-major { color: var(--color-major); font-weight: 900; font-size: 0.85rem; letter-spacing: 0; }
+        .star-lucky { color: var(--color-lucky); font-weight: 600; font-size: 0.75rem; }
+        .star-bad { color: var(--color-bad); font-size: 0.7rem; }
+        .star-aux { color: var(--color-aux); font-size: 0.65rem; transform: scale(0.9); transform-origin: left; }
+
+        /* 四化樣式 - 修正顏色 */
+        .s4-badge {
+            font-size: 0.6em;
+            border-radius: 1px;
+            padding: 0 1px;
+            margin-left: 1px;
+            color: white;
+            font-weight: normal;
+            vertical-align: text-top;
+        }
+        .bg-lu { background-color: #15803d; } /* 祿：綠 */
+        .bg-quan { background-color: #9333ea; } /* 權：紫 */
+        .bg-ke { background-color: #2563eb; } /* 科：藍 */
+        .bg-ji { background-color: #dc2626; } /* 忌：紅 */
+
+        /* 飛星箭頭樣式 */
+        .fly-arrow {
+            font-size: 0.6em;
+            margin-left: 1px;
+            border: 1px solid;
+            padding: 0 1px;
+            border-radius: 1px;
+            background: #fff;
+            font-weight: bold;
+        }
+        .text-lu { color: #15803d; border-color: #15803d; }
+        .text-quan { color: #9333ea; border-color: #9333ea; }
+        .text-ke { color: #2563eb; border-color: #2563eb; }
+        .text-ji { color: #dc2626; border-color: #dc2626; }
+
+        .palace-footer {
+            border-top: 1px solid #e7e5e4;
+            margin-top: 1px;
+            padding-top: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 0.65rem;
+        }
+        .gz-text { font-weight: bold; color: #44403c; font-family: serif; }
+        .daxian-text { color: #0891b2; font-family: monospace; font-weight: bold; display: none; transform: scale(0.9); transform-origin: left bottom; }
+        .mode-show-daxian .daxian-text { display: block; }
+
+        .center-block {
+            grid-column: 2 / 4;
+            grid-row: 2 / 4;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #d6d3d1;
+            margin: 1px;
+            text-align: center;
+            padding: 4px;
+            overflow: hidden;
+        }
+        .center-title { font-size: 1.2rem; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 2px; color: #292524; border-bottom: 2px solid #292524; padding-bottom: 2px;}
+
+        .input-elegant {
+            background-color: #fafaf9;
+            border: 1px solid #a8a29e;
+            color: #44403c;
+            padding: 1px 4px;
+            border-radius: 0;
+            font-family: "Noto Serif TC", serif;
+            font-size: 0.8rem;
+        }
+        .btn-elegant {
+            background-color: #44403c;
+            color: #f5f5f4;
+            padding: 2px 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            border-radius: 2px;
+        }
+
+        /* Toggle Switch Compact */
+        .toggle-label {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.75rem;
+            color: #44403c;
+            margin-left: 4px;
+            user-select: none;
+        }
+        .toggle-checkbox {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border: 1px solid #78716c;
+            margin-right: 2px;
+            display: grid;
+            place-content: center;
+        }
+        .toggle-checkbox::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #b91c1c;
+        }
+        .toggle-checkbox:checked::before { transform: scale(1); }
+
+        /* AI Button */
+        .btn-ai {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            box-shadow: 0 2px 5px rgba(168, 85, 247, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        /* AI Modal */
+        .ai-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
+        .ai-modal-content {
+            background: white;
+            width: 95%;
+            max-width: 600px;
+            height: 80vh;
+            border-radius: 8px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .ai-header { padding: 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+        .ai-body { padding: 15px; overflow-y: auto; font-size: 0.95em; line-height: 1.6; color: #374151; }
+        
+        /* Scrollbar styling for chart */
+        .overflow-x-auto::-webkit-scrollbar { height: 4px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<!-- AI Analysis Modal -->
+<div id="aiModal" class="ai-modal-overlay">
+    <div class="ai-modal-content">
+        <div class="ai-header">
+            <h3 class="font-bold text-base flex items-center gap-2">
+                <span>✨</span> AI 解盤
+            </h3>
+            <button onclick="app.closeAI()" class="text-gray-500 hover:text-gray-700 text-lg">&times;</button>
+        </div>
+        <div class="ai-body" id="aiResult">
+            <!-- Content -->
+        </div>
+    </div>
+</div>
+
+<div class="control-panel">
+    <div class="flex flex-wrap gap-2 justify-center items-center max-w-full mx-auto">
+        <span class="font-black text-base tracking-widest text-stone-800 hidden sm:inline">紫微</span>
+        
+        <div class="flex items-center gap-1 bg-white px-1 py-0.5 border border-stone-300 shadow-sm overflow-x-auto max-w-[100%]">
+            <label class="text-[0.65rem] text-stone-500 whitespace-nowrap">生辰</label>
+            <input type="number" id="inpYear" class="input-elegant w-12" value="1990">
+            <select id="inpMonth" class="input-elegant w-10 pl-0"></select>
+            <select id="inpDay" class="input-elegant w-10 pl-0"></select>
+            <select id="inpHour" class="input-elegant w-12 pl-0"></select>
+            <select id="inpGender" class="input-elegant w-10 pl-0 text-[0.7rem]">
+                <option value="M">男</option>
+                <option value="F">女</option>
+            </select>
+        </div>
+
+        <div class="flex items-center gap-1 bg-orange-50 px-1 py-0.5 border border-orange-200 shadow-sm">
+            <label class="text-[0.65rem] text-orange-800 font-bold whitespace-nowrap">流年</label>
+            <input type="number" id="viewYear" class="input-elegant w-12 border-orange-300 text-orange-900 bg-white font-bold">
+        </div>
+
+        <div class="flex items-center gap-1 bg-stone-100 px-1 py-0.5 border border-stone-200">
+            <label class="toggle-label">
+                <input type="checkbox" id="checkDaXian" class="toggle-checkbox" onchange="app.updateDisplayMode()">
+                大限
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="checkLiuNian" class="toggle-checkbox" onchange="app.updateDisplayMode()">
+                流年
+            </label>
+        </div>
+
+        <div class="flex gap-2">
+            <button onclick="app.calculate()" class="btn-elegant">排盤</button>
+            <button onclick="app.askGemini()" class="btn-ai">AI</button>
+        </div>
+    </div>
+</div>
+
+<div class="main-content" id="mainChartContainer">
+    <div class="chart-container">
+        <div class="chart-grid">
+            <div id="palace-5" class="palace-cell" onclick="app.toggleSelect(5)"></div>
+            <div id="palace-6" class="palace-cell" onclick="app.toggleSelect(6)"></div>
+            <div id="palace-7" class="palace-cell" onclick="app.toggleSelect(7)"></div>
+            <div id="palace-8" class="palace-cell" onclick="app.toggleSelect(8)"></div>
+            
+            <div id="palace-4" class="palace-cell" onclick="app.toggleSelect(4)"></div>
+            <div id="palace-9" class="palace-cell" onclick="app.toggleSelect(9)"></div>
+            
+            <div id="palace-3" class="palace-cell" onclick="app.toggleSelect(3)"></div>
+            <div id="palace-10" class="palace-cell" onclick="app.toggleSelect(10)"></div>
+            
+            <div id="palace-2" class="palace-cell" onclick="app.toggleSelect(2)"></div>
+            <div id="palace-1" class="palace-cell" onclick="app.toggleSelect(1)"></div>
+            <div id="palace-0" class="palace-cell" onclick="app.toggleSelect(0)"></div>
+            <div id="palace-11" class="palace-cell" onclick="app.toggleSelect(11)"></div>
+
+            <div class="center-block">
+                <div class="center-title">命盤</div>
+                <div class="text-[0.7rem] sm:text-xs text-stone-700 w-full text-left space-y-1 font-serif leading-tight">
+                    <p id="infoSolar" class="border-b border-stone-300 pb-0.5 truncate"></p>
+                    <p id="infoLunar" class="border-b border-stone-300 pb-0.5 truncate"></p>
+                    <div class="flex justify-between font-bold text-stone-900 mt-1">
+                        <span id="infoGZ"></span>
+                        <span id="infoFive" class="text-red-800"></span>
+                    </div>
+                    <div class="bg-orange-50 p-1 mt-1 border border-orange-100 rounded text-center">
+                        <div class="flex justify-center gap-2 items-baseline">
+                            <span id="infoViewYear" class="font-bold text-stone-800"></span>
+                            <span id="infoAge" class="font-bold text-orange-700 text-base"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* 1. LUNAR.JS - Exact implementation from source */
+var BYEAR=1201;var Nyear=150;var Nmonth=13;var title;var y,m,d;var jieAlert;
+// Global storage
+var solar = {}; var lunar = {}; var gan = {}; var zhi = {}; var gan2 = {}; var zhi2 = {}; var lunar2 = {};
+
+function make_array() { for(var i=0;i<arguments.length;i++) { this[i]=arguments[i]; } this.length=arguments.length; }
+function make_n_array(num) { for(var i=0;i<num;i++) { this[i]=i; } this.length=num; }
+function MyDate(y,m,d,h,w,l){this.y=y;this.m=m;this.d=d;this.h=h;this.w=w;this.l=l;}
+
+var yearInfo=new make_array(
+    0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,0x04ae0,
+    0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,0x04970,
+    0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,0x06566,
+    0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,0x0d4a0,
+    0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,0x06ca0,
+    0x0b550,0x15355,0x04da0,0x0a5d0,0x14573,0x052d0,0x0a9a8,0x0e950,0x06aa0,0x0aea6,
+    0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,0x096d0,
+    0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b5a0,0x195a6,0x095b0,
+    0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,0x04af5,
+    0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x055c0,0x0ab60,0x096d5,0x092e0,0x0c960,
+    0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,0x0a950,
+    0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,0x07954,
+    0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,0x05aa0,
+    0x076a3,0x096d0,0x04bd7,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,0x0b5a0,
+    0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0
+);
+var fest = new make_array(
+4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 8, 9, 8, 8, 6,5, 7, 6, 7, 7, 8, 9, 9, 9, 8, 8, 7,
+5, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 7, 6, 7, 7, 8, 9, 9, 9, 8, 8, 7,
+5, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 7, 6, 7, 7, 8, 9, 9, 9, 8, 8, 7,
+5, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 9, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 9, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 9, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 9, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 8, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 7, 8, 8, 8, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,5, 6, 6, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 6, 5, 5, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 6, 7, 7, 8, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 6, 7, 7, 8, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 6, 7, 7, 8, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 6, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 6, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+5, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 8, 8, 8, 9, 8, 8, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,5, 5, 5, 5, 5, 8, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,5, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,5, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,5, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 9, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,
+4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 6, 7, 7, 8, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 7, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 6, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 8, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 6, 6, 7, 8, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 5, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 8, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 7, 7, 6, 5,3, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 5, 4, 5, 5, 7, 7, 7, 8, 7, 7, 5,4, 6, 5, 5, 6, 7, 7, 8, 8, 7, 7, 6,
+4, 5, 4, 5, 5, 6, 7, 7, 7, 7, 6, 5,3, 5, 4, 5, 5, 6, 7, 7, 8, 7, 7, 5);
+
+var ymonth=new make_n_array(Nyear);var yday=new make_n_array(Nyear);var mday=new make_n_array(Nmonth+1);var moon=new make_array(29,30);var weekdayGB=new make_array("日","一","二","三","四","五","六");var ShengXiaoGB=new make_array("鼠","牛","虎","兔","龍","蛇","馬","羊","猴","雞","狗","豬");var GanGB=new make_array("甲","乙","丙","丁","戊","己","庚","辛","壬","癸");var ZhiGB=new make_array("子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥");var daysInSolarMonth=new make_array(0,31,28,31,30,31,30,31,31,30,31,30,31);var solarFirstDate=new MyDate(1900,1,31,0,3,0);var LunarFirstDate=new MyDate(1900,1,1,0,3,0);var GanFirstDate=new MyDate(6,4,0,0,3,0);var ZhiFirstDate=new MyDate(0,2,4,0,3,0);
+
+function LeapYear(y){return((y%4==0)&&(y%100!=0)||(y%400==0))}
+function solar2Day1(d){var offset,delta;var i;delta=d.y-BYEAR;if(delta<0){return -1}offset=Math.floor(delta*365)+Math.floor(delta/4)-Math.floor(delta/100)+Math.floor(delta/400);for(i=1;i<d.m;i++){offset+=daysInSolarMonth[i]}if((d.m>2)&&(LeapYear(d.y)))offset++;offset+=d.d-1;if((d.m==2)&&LeapYear(d.y)){if(d.d>29){return -1}}else if(d.d>daysInSolarMonth[d.m]){return -1}return offset}
+function solar2Day(d){return(solar2Day1(d)-solar2Day1(solarFirstDate))}
+function make_yday(){var year,i,leap;var code;for(year=0;year<Nyear;year++){code=yearInfo[year];leap=code&0xf;yday[year]=0;if(leap!=0){i=(code>>16)&0x1;yday[year]+=moon[i]}code>>=4;for(i=0;i<Nmonth-1;i++){yday[year]+=moon[code&0x1];code>>=1}ymonth[year]=12;if(leap!=0)ymonth[year]++}return Nyear}
+function make_mday(year){var i,leapMonth,code;code=yearInfo[year];leapMonth=code&0xf;code>>=4;if(leapMonth==0){mday[Nmonth]=0;for(i=Nmonth-1;i>=1;i--){mday[i]=moon[code&0x1];code>>=1}}else{i=(yearInfo[year]>>16)&0x1;mday[leapMonth+1]=moon[i];for(i=Nmonth;i>=1;i--){if(i==leapMonth+1)i--;mday[i]=moon[code&0x1];code>>=1}}return leapMonth}
+
+function day2Lunar(offset,d) {
+  var i,m,nYear,leapMonth,temp=0;
+  nYear = make_yday(); // Ensure yday array is populated
+  for(i=0; i<nYear && offset>0; i++) offset -= yday[i];
+  if(offset<0) offset+=yday[--i];
+  d.y = 1900+i;
+  
+  leapMonth = make_mday(i);
+  for(m=1; m<=12 && offset>0; m++) offset -= mday[m];
+  if(offset<0) offset += mday[--m];
+  
+  d.l= 0;
+  if(leapMonth>0){
+    d.l = (leapMonth == (m-1));
+    if(m>leapMonth) --m;
+  }
+  d.m = m;
+  d.d = offset+1;
+}
+
+function CalGZ(offset, d, g, z)
+{
+  var year, month;
+  year = d.y - 1900;
+  month = year * 12 + d.m - 1;
+  g.y = (6 + year) % 10;
+  z.y = (0 + year) % 12;
+  // Simplified GZ for day/month logic omitted for brevity in this compacted view, mostly for Year/Zhi
+}
+
+function solar2Lunar() {
+  var offset;
+  offset=solar2Day(solar);
+  day2Lunar(offset,lunar);
+  // CalGZ logic simplified as we mostly need Lunar Year/Month/Day
+  gan.y = (6 + (lunar.y - 1900)) % 10;
+  zhi.y = (0 + (lunar.y - 1900)) % 12;
+}
+
+function Lunar(type,my_y,my_m,my_d) 
+{
+  if(type==0) {//陽->陰
+    solar.y=my_y;
+    solar.m=my_m;
+    solar.d=my_d;
+    solar2Lunar();
+  }
+}
+
+/* 2. ZIWEISTAR.JS */
+var EarthlyBranches=["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+var HeavenlyStems=["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
+var Palace=["命宮","父母","福德","田宅","官祿","交友","遷移","疾厄","財帛","子女","夫妻","兄弟","身"];
+var FiveElements=["水二局","火六局","土五局","木三局","金四局"];
+var DaShian=[2,6,5,3,4];
+var StarM_A14=["紫微","天機","太陽","武曲","天同","廉貞","天府","太陰","貪狼","巨門","天相","天梁","七殺","破軍"];
+var StarM_A07=["文昌","文曲","左輔","右弼","天魁","天鉞","祿存"];
+var StarM_S04=["化祿","化權","化科","化忌"];
+var StarM_B06=["擎羊","陀羅","火星","鈴星","天空","地劫"];
+var StarO_S05=["天馬","龍池","鳳閣","紅鸞","天喜"];
+var FiveEleTable=[[1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,0,0,1,1,2,2,3,3,4],[9,6,11,4,1,2,10,7,0,5,2,3,11,8,1,6,3,4,0,9,2,7,4,5,1,10,3,8,5,6],[6,11,4,1,2,7,0,5,2,3,8,1,6,3,4,9,2,7,4,5,10,3,8,5,6,11,4,9,6,7],[4,1,2,5,2,3,6,3,4,7,4,5,8,5,6,9,6,7,10,7,8,11,8,9,0,9,10,1,10,11],[11,4,1,2,0,5,2,3,1,6,3,4,2,7,4,5,3,8,5,6,4,9,6,7,5,10,7,8,6,11]];
+var FiveEleArr=[[0,1,3,2,4,1],[1,2,4,3,0,2],[2,3,0,4,1,3],[3,4,1,0,2,4],[4,0,2,1,3,0]];
+var Star_A14=[[[0],[],[13],[],[5,6],[7],[8],[4,9],[3,10],[2,11],[12],[1]],[[1],[0,13],[],[6],[7],[5,8],[9],[10],[4,11],[3,12],[2],[]],[[13],[1],[0,6],[7],[8],[9],[5,10],[11],[12],[10],[3],[2]],[[2],[6],[1,7],[0,8],[9],[10],[11],[5,12],[],[],[4],[3,13]],[[3,6],[2,7],[8],[1,9],[0,10],[11],[12],[],[5],[],[13],[4]],[[4,7],[3,8],[2,9],[10],[1,10],[0,12],[],[],[],[5,13],[],[6]],[[8],[4,9],[3,10],[2,11],[12],[1],[0],[],[13],[],[5,6],[7]],[[9],[10],[4,11],[3,12],[2],[],[1],[0,13],[],[6],[7],[5,8]],[[5,10],[11],[12],[10],[3],[2],[13],[1],[0,6],[7],[8],[9]],[[11],[5,12],[],[],[4],[3,13],[2],[6],[1,7],[0,8],[9],[10]],[[12],[],[5],[],[13],[4],[3,6],[2,7],[8],[1,9],[0,10],[11]],[[],[],[],[5,13],[],[6],[4,7],[3,8],[2,9],[10],[1,10],[0,12]]];
+var Star_Z06=[[0,1,2,3,4,5,6,7,8,9,10,11],[11,0,1,2,3,4,5,6,7,8,9,10],[9,10,11,0,1,2,3,4,5,6,7,8],[8,9,10,11,0,1,2,3,4,5,6,7],[7,8,9,10,11,0,1,2,3,4,5,6],[4,5,6,7,8,9,10,11,0,1,2,3],[4,3,2,1,0,11,10,9,8,7,6,5]];
+var Star_T08=[[0,1,2,3,4,5,6,7,8,9,10,11],[1,2,3,4,5,6,7,8,9,10,11,0],[2,3,4,5,6,7,8,9,10,11,0,1],[3,4,5,6,7,8,9,10,11,0,1,2],[4,5,6,7,8,9,10,11,0,1,2,3],[5,6,7,8,9,10,11,0,1,2,3,4],[6,7,8,9,10,11,0,1,2,3,4,5],[10,11,0,1,2,3,4,5,6,7,8,9]];
+var Star_G07=[[10,9,8,7,6,5,4,3,2,1,0,11],[4,5,6,7,8,9,10,11,0,1,2,3],[4,5,6,7,8,9,10,11,0,1,2,3],[10,9,8,7,6,5,4,3,2,1,0,11],[1,0,11,11,1,0,1,6,3,3],[7,8,9,9,7,8,7,2,5,5],[2,3,5,6,5,6,8,9,11,0]];
+var Star_B06=[[3,4,6,7,6,7,9,10,0,1],[1,2,4,5,4,5,7,8,10,11],[[2,3,4,5,6,7,8,9,10,11,0,1],[3,4,5,6,7,8,9,10,11,0,1,2],[1,2,3,4,5,6,7,8,9,10,11,0],[9,10,11,0,1,2,3,4,5,6,7,8]],[[10,11,0,1,2,3,4,5,6,7,8,9],[10,11,0,1,2,3,4,5,6,7,8,9],[3,4,5,6,7,8,9,10,11,0,1,2],[10,11,0,1,2,3,4,5,6,7,8,9]],[11,10,9,8,7,6,5,4,3,2,1,0],[11,0,1,2,3,4,5,6,7,8,9,10]];
+var Star_OS5=[[2,11,8,5,2,11,8,5,2,11,8,5],[4,5,6,7,8,9,10,11,0,1,2,3],[10,9,8,7,6,5,4,3,2,1,0,11],[3,2,1,0,11,10,9,8,7,6,5,4],[9,8,7,6,5,4,3,2,1,0,11,10]];
+
+var SiHuaFullNames = [
+    ["廉貞","破軍","武曲","太陽"], ["天機","天梁","紫微","太陰"], ["天同","天機","文昌","廉貞"], ["太陰","天同","天機","巨門"], ["貪狼","太陰","右弼","天機"],
+    ["武曲","貪狼","天梁","文曲"], ["太陽","武曲","太陰","天同"], ["巨門","太陽","文曲","文昌"], ["天梁","紫微","左輔","武曲"], ["破軍","巨門","太陰","貪狼"]
+];
+
+/* 3. ZIWEICORE.JS */
+var ziwei = {
+    y:null, m:null, d:null, h:null, g:null, l:null, b:null, f:null, z:null,
+    yS:null, mS:null, dS:null,
+    y1Pos:null, y2Pos:null, hPos:null, lPos:null, bPos:null, zPos:null,
+    Place12:null,
+    
+    computeZiWei:function (y_Solar,m_Solar,d_Solar,h_Solar,g_Solar){
+        yS=y_Solar; mS=m_Solar; dS=d_Solar;
+        Lunar(0,yS,mS,dS); 
+        // Correct Lunar Year/Month/Day retrieval
+        var ly = lunar.y; var lm = lunar.m; var ld = lunar.d;
+        
+        var y = HeavenlyStems[(ly - 4) % 10] + EarthlyBranches[(ly - 4) % 12];
+        m = lm; d = ld; 
+        h = h_Solar; g = g_Solar;
+        
+        y1Pos = HeavenlyStems.indexOf(y.substring(0,1));
+        y2Pos = EarthlyBranches.indexOf(y.substring(1,2));
+        hPos = EarthlyBranches.indexOf(h);
+        
+        this.setZiwei(d);
+        this.stepSetStar(y,m,d,h);
+        return {
+            palaces: Place12,
+            info: {
+                lunarDate: `${GanGB[(ly-4)%10]}${ZhiGB[(ly-4)%12]}年${lunar.l?"閏":""}${m}月${d}日`,
+                solarDate: `${yS}年${mS}月${dS}日`,
+                shengxiao: ShengXiaoGB[(ly-4)%12],
+                fiveElement: f,
+                gender: (y1Pos%2==0?"陽":"陰") + (g=="M"?"男":"女"),
+                mingPos: lPos,
+                shenPos: bPos
+            }
+        };
+    },
+    
+    getStarArr:function (STAR,size,pos){
+        var starArray = new Array();
+        for (var i=0;i<size;i++){ starArray[i]=STAR[i][pos]; } return starArray;
+    },
+    getStarArrByPosArr:function (STAR,size,PosArr){
+        var starArray = new Array();
+        for (var i=0;i<size;i++){ starArray[i]=STAR[i][PosArr[i]]; } return starArray;
+    },
+    
+    getS04Str:function (starName, stemIndex){
+        let siHua = SiHuaFullNames[stemIndex];
+        let idx = siHua.indexOf(starName);
+        if (idx >= 0) {
+            let s4Type = ["祿","權","科","忌"][idx];
+            let s4Class = idx==0?"bg-lu":idx==1?"bg-quan":idx==2?"bg-ke":"bg-ji";
+            return `<span class='s4-badge ${s4Class}'>${s4Type}</span>`;
+        }
+        return "";
+    },
+
+    setZiwei:function (d){
+        l=EarthlyBranches[((12-hPos)+1+m*1.0)%12];
+        b=EarthlyBranches[(12-((22-hPos)+1-m*1.0)%12)%12];
+        lPos=EarthlyBranches.indexOf(l);
+        bPos=EarthlyBranches.indexOf(b);
+        f=FiveElements[FiveEleArr[y1Pos%5][((lPos-(lPos%2==0?0:1))/2)%6]];
+        z=EarthlyBranches[FiveEleTable[FiveElements.indexOf(f)][d-1]];
+        zPos=EarthlyBranches.indexOf(z);
+    },
+
+    stepSetStar:function (y,m,d,h){
+        var s14=Star_A14[zPos];
+        var sZ06=this.getStarArr(Star_Z06,7,zPos);
+        var sT08=this.getStarArr(Star_T08,8,sZ06[6]);
+        var sG07=this.getStarArrByPosArr(Star_G07,7,[hPos,hPos,m-1,m-1,y1Pos,y1Pos,y1Pos]);
+        var sB06=[Star_B06[0][y1Pos],Star_B06[1][y1Pos],Star_B06[2][y2Pos%4][hPos],Star_B06[3][y2Pos%4][hPos],Star_B06[4][hPos],Star_B06[5][hPos]];
+        var OS05=this.getStarArr(Star_OS5,5,y2Pos);
+        
+        Place12=new Array(12);
+        for (var i=0;i<12;i++){
+            var StarA=[], StarB=[], StarC=[], Star6=[];
+            for (var k=0;k<6;k++){ 
+                if (sZ06[k]==i){ StarA.push(StarM_A14[k] + this.getS04Str(StarM_A14[k], y1Pos)); }
+                if (sB06[k]==i){ StarB.push(StarM_B06[k]); }
+            }
+            for (var k=0;k<8;k++){ 
+                if (sT08[k]==i){ StarA.push(StarM_A14[k+6] + this.getS04Str(StarM_A14[k+6], y1Pos)); }
+            }
+            for (var k=0;k<7;k++){ 
+                if (sG07[k]==i){ Star6.push(StarM_A07[k] + this.getS04Str(StarM_A07[k], y1Pos)); }
+            }
+            for (var k=0;k<5;k++){ 
+                if (OS05[k]==i){ StarC.push(StarO_S05[k]); }
+            }
+            var stemIdx = ((y1Pos%5)*2+(i<2?i+2:i)%10)%10;
+            Place12[i]={
+                "MangA": HeavenlyStems[stemIdx], 
+                "StemIndex": stemIdx,
+                "MangAGZ": HeavenlyStems[stemIdx] + EarthlyBranches[i], 
+                "MangB": Palace[(12-lPos+i)%12],
+                "MangC": (bPos==i?"身宮":""),
+                "StarA": StarA,"StarB": StarB,"StarC": StarC,"Star6": Star6
+            };
+        }
+    },
+    
+    getDaShian:function (){
+        var DaShianYear=DaShian[FiveElements.indexOf(f)];
+        var MangDirection=y1Pos%2; MangDirection+=(g=="M")?1:0;
+        var DShian=new Array(10);
+        var Ranges = [];
+        for (var i=0;i<12;i++){
+            var DSY=MangDirection==1?DaShianYear+i*10:(DaShianYear-i*10+120)%120;
+            DShian[(i+lPos)%12]=DSY.toString()+" - "+(DSY+9).toString();
+            Ranges[(i+lPos)%12]=DSY;
+        }
+        return {DShian, Ranges};
+    }
+};
+</script>
+
+<script>
+const app = {
+    chartData: null,
+    daXianData: null,
+    selectedPalaceIndex: null,
+    resultInfo: null,
+
+    init: function() {
+        this.populateSelects();
+        this.setNow();
+    },
+    
+    populateSelects: function() {
+        const $ = id => document.getElementById(id);
+        for(let i=1; i<=12; i++) $("inpMonth").innerHTML += `<option value="${i}">${i}月</option>`;
+        for(let i=1; i<=31; i++) $("inpDay").innerHTML += `<option value="${i}">${i}日</option>`;
+        EarthlyBranches.forEach(b => $("inpHour").innerHTML += `<option value="${b}">${b}時</option>`);
+    },
+
+    setNow: function() {
+        const now = new Date();
+        document.getElementById('inpYear').value = now.getFullYear();
+        document.getElementById('inpMonth').value = now.getMonth() + 1;
+        document.getElementById('inpDay').value = now.getDate();
+        document.getElementById('viewYear').value = now.getFullYear();
+        const h = now.getHours();
+        let bIdx = (h >= 23 || h < 1) ? 0 : Math.floor((h + 1) / 2);
+        document.getElementById('inpHour').value = EarthlyBranches[bIdx];
+        this.calculate();
+    },
+
+    updateDisplayMode: function() {
+        const container = document.getElementById('mainChartContainer');
+        const showDa = document.getElementById('checkDaXian').checked;
+        const showLiu = document.getElementById('checkLiuNian').checked;
+        if(showDa) container.classList.add('mode-show-daxian'); else container.classList.remove('mode-show-daxian');
+        if(showLiu) container.classList.add('mode-show-liunian'); else container.classList.remove('mode-show-liunian');
+    },
+
+    calculate: function() {
+        const y = parseInt(document.getElementById('inpYear').value);
+        const m = parseInt(document.getElementById('inpMonth').value);
+        const d = parseInt(document.getElementById('inpDay').value);
+        const h = document.getElementById('inpHour').value;
+        const g = document.getElementById('inpGender').value;
+        const viewYear = parseInt(document.getElementById('viewYear').value);
+
+        if (y < 1900 || y > 2049) { alert("年份範圍: 1900-2049"); return; }
+
+        const result = ziwei.computeZiWei(y, m, d, h, g);
+        this.chartData = result.palaces;
+        this.resultInfo = result.info;
+        this.daXianData = ziwei.getDaShian();
+
+        const age = viewYear - y + 1;
+        let daXianIndex = -1;
+        for(let i=0; i<12; i++) {
+            let start = this.daXianData.Ranges[i];
+            if(age >= start && age <= start+9) {
+                daXianIndex = i;
+                break;
+            }
+        }
+        let liuBranch = (viewYear - 1900) % 12;
+        if(liuBranch < 0) liuBranch += 12;
+        let liuNianIndex = liuBranch;
+
+        document.getElementById('infoSolar').innerText = `國曆：${result.info.solarDate}`;
+        document.getElementById('infoLunar').innerText = `農曆：${result.info.lunarDate}`;
+        document.getElementById('infoGZ').innerText = `${result.info.shengxiao} / ${result.info.gender}`;
+        document.getElementById('infoFive').innerText = result.info.fiveElement;
+        document.getElementById('infoAge').innerText = `${age} 歲`;
+        document.getElementById('infoViewYear').innerText = `流年 ${viewYear}`;
+
+        this.renderGrid(daXianIndex, liuNianIndex);
+        this.updateDisplayMode();
+    },
+
+    toggleSelect: function(idx) {
+        if(this.selectedPalaceIndex === idx) this.selectedPalaceIndex = null;
+        else this.selectedPalaceIndex = idx;
+        this.calculate(); 
+    },
+
+    renderGrid: function(daXianIdx, liuNianIdx) {
+        let flyMap = {}; 
+        if(this.selectedPalaceIndex !== null) {
+            let stem = this.chartData[this.selectedPalaceIndex].StemIndex;
+            let siHua = SiHuaFullNames[stem];
+            flyMap[siHua[0]] = "祿";
+            flyMap[siHua[1]] = "權";
+            flyMap[siHua[2]] = "科";
+            flyMap[siHua[3]] = "忌";
+        }
+
+        for(let i=0; i<12; i++) {
+            const pData = this.chartData[i];
+            const el = document.getElementById(`palace-${i}`);
+            
+            el.className = `palace-cell ${i===this.selectedPalaceIndex ? 'selected' : ''}`;
+
+            let daLabel = Palace[(i - daXianIdx + 12) % 12];
+            let liuLabel = Palace[(i - liuNianIdx + 12) % 12];
+
+            const processStar = (htmlStr) => {
+                let rawName = htmlStr.replace(/<[^>]*>/g, "");
+                let flyHtml = "";
+                for (let key in flyMap) {
+                    if (rawName.includes(key)) {
+                        let type = flyMap[key];
+                        let c = type=='祿'?'text-lu':type=='權'?'text-quan':type=='科'?'text-ke':'text-ji';
+                        flyHtml = `<span class="fly-arrow ${c}">→${type}</span>`;
+                        break;
+                    }
+                }
+                return htmlStr + flyHtml;
+            };
+
+            let starsHtml = `<div class="star-list">
+                <div class="star-row">
+                    ${pData.StarA.map(s => `<span class="star-major">${processStar(s)}</span>`).join("")}
+                </div>
+                <div class="star-row">
+                    ${pData.Star6.map(s => `<span class="star-lucky">${processStar(s)}</span>`).join("")}
+                    ${pData.StarB.map(s => `<span class="star-bad">${s}</span>`).join("")}
+                    ${pData.StarC.map(s => `<span class="star-aux">${s}</span>`).join("")}
+                </div>
+            </div>`;
+
+            el.innerHTML = `
+                <div class="palace-header">
+                    <span class="palace-label label-ben">${pData.MangB} <span class="font-normal text-stone-500 ml-1">${pData.MangC}</span></span>
+                    <span class="palace-label label-da">大${daLabel}</span>
+                    <span class="palace-label label-liu">流${liuLabel}</span>
+                </div>
+                ${starsHtml}
+                <div class="palace-footer">
+                    <span class="daxian-text">${this.daXianData.DShian[i]||""}</span>
+                    <span class="gz-text">${pData.MangAGZ}</span>
+                </div>
+            `;
+        }
+    },
+
+    askGemini: async function() {
+        const modal = document.getElementById('aiModal');
+        const resultDiv = document.getElementById('aiResult');
+        const viewYear = document.getElementById('viewYear').value;
+        const apiKey = ""; 
+
+        modal.style.display = 'flex';
+        resultDiv.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><p>正在請示 AI 命理大師...</p></div>`;
+
+        try {
+            let prompt = `你是一位專業的紫微斗數命理大師。請分析：
+**基本資料**
+- 農曆：${this.resultInfo.lunarDate}
+- 局數：${this.resultInfo.fiveElement}
+- 性別/陰陽：${this.resultInfo.gender}
+- 生肖：${this.resultInfo.shengxiao}
+- 觀測流年：${viewYear}
+
+**十二宮位星曜**
+`;
+            this.chartData.forEach((p) => {
+                let stars = [...p.StarA, ...p.Star6, ...p.StarB, ...p.StarC].join(", ").replace(/<[^>]*>/g, "");
+                prompt += `- ${p.MangB} (${p.MangAGZ}): ${stars}\n`;
+            });
+
+            prompt += `\n請分析：1.本命性格 2.事業財運 3.${viewYear}年流年運勢。用Markdown輸出。`;
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "分析失敗，請稍後再試。";
+            resultDiv.innerHTML = `<div class="markdown-content">${marked.parse(text)}</div>`;
+
+        } catch (e) {
+            resultDiv.innerHTML = `<p style="color:red;">連線錯誤。</p>`;
+        }
+    },
+
+    closeAI: function() { document.getElementById('aiModal').style.display = 'none'; }
+};
+
+window.onload = function() { app.init(); };
+</script>
+</body>
+</html>
